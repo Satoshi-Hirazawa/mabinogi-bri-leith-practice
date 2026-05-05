@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>ブリーレフ 2層 50% 練習 iPad版</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: rgb(77,77,77);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  #topBar {
+    position: fixed;
+    left: env(safe-area-inset-left, 0px);
+    right: env(safe-area-inset-right, 0px);
+    top: env(safe-area-inset-top, 0px);
+    height: 54px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    pointer-events: none;
+  }
+
+  #topBar button,
+  #topBar .pill {
+    pointer-events: auto;
+  }
+
+  .pill {
+    background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 13px;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 2px 12px rgba(0,0,0,.18);
+  }
+
+  button {
+    border: 1px solid rgba(255,255,255,.28);
+    background: rgba(0,0,0,.58);
+    color: white;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  button:active { transform: scale(.98); }
+
+  #panel {
+    position: fixed;
+    z-index: 30;
+    left: max(10px, env(safe-area-inset-left, 0px));
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    max-height: min(64vh, 560px);
+    overflow: auto;
+    background: rgba(22,22,22,.94);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 8px 35px rgba(0,0,0,.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transform: translateY(calc(100% + 24px));
+    transition: transform .22s ease;
+    touch-action: pan-y;
+  }
+
+  #panel.open { transform: translateY(0); }
+
+  h1 {
+    margin: 0 0 10px;
+    font-size: 18px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+  }
+
+  .row {
+    font-size: 13px;
+  }
+
+  label {
+    display:block;
+    margin-bottom: 4px;
+    color: #ddd;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    height: 32px;
+  }
+
+  .value { color:#fff; font-weight:700; }
+
+  .checkRow {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top: 12px;
+    font-size: 14px;
+  }
+
+  .checkRow input {
+    width: 22px;
+    height: 22px;
+  }
+
+  .panelButtons {
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .info {
+    margin-top: 12px;
+    line-height: 1.55;
+    font-size: 12px;
+    color: #ddd;
+  }
+
+  #hud {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    top: calc(env(safe-area-inset-top, 0px) + 66px);
+    z-index: 15;
+    pointer-events: none;
+    display: grid;
+    gap: 6px;
+  }
+
+  .hudLine {
+    width: fit-content;
+    background: rgba(0,0,0,.50);
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 999px;
+    padding: 7px 10px;
+    font-size: 13px;
+    text-shadow: 0 1px 3px rgba(0,0,0,.6);
+  }
+
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+    #panel { max-height: 72vh; }
+    .pill { font-size: 12px; padding: 7px 9px; }
+    button { padding: 9px 10px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="topBar">
+  <button id="settingsBtn">設定</button>
+  <button id="restartTop">リセット</button>
+  <div class="pill" id="statePill">待機中</div>
+</div>
+
+<div id="hud">
+  <div class="hudLine" id="hudTime">経過: 0.00秒</div>
+  <div class="hudLine" id="hudClear">クリア時間: 0.00 / 7.5秒</div>
+  <div class="hudLine" id="hudDodge">回避成功: 0</div>
+  <div class="hudLine" id="hudNote">クリック/タッチで開始</div>
+</div>
+
+<div id="panel">
+  <h1>ブリーレフ 2層 50% 練習</h1>
+
+  <div class="grid">
+    <div class="row">
+      <label>移動速度: <span id="vSpeed" class="value">280</span></label>
+      <input id="speed" type="range" min="100" max="600" step="10" value="280">
+    </div>
+    <div class="row">
+      <label>レーザー幅: <span id="vWidth" class="value">200</span></label>
+      <input id="laserWidth" type="range" min="50" max="320" step="10" value="200">
+    </div>
+    <div class="row">
+      <label>●の当たり判定倍率: <span id="vHitScale" class="value">3.0</span> 倍</label>
+      <input id="hitScale" type="range" min="1" max="10" step="0.1" value="3">
+    </div>
+    <div class="row">
+      <label>3分割ランダム発生率: <span id="vRandomLane" class="value">25</span>%</label>
+      <input id="randomLaneRate" type="range" min="0" max="100" step="1" value="25">
+    </div>
+    <div class="row">
+      <label>レーザー予告時間: <span id="vFade" class="value">1.5</span> 秒</label>
+      <input id="fade" type="range" min="0.3" max="2.0" step="0.1" value="1.5">
+    </div>
+    <div class="row">
+      <label>レーザー間隔 初期値: <span id="vInitial" class="value">1.5</span> 秒</label>
+      <input id="initialInterval" type="range" min="0.3" max="3.0" step="0.1" value="1.5">
+    </div>
+    <div class="row">
+      <label>加速量: <span id="vDecrease" class="value">0.090</span></label>
+      <input id="intervalDecrease" type="range" min="0.000" max="0.200" step="0.005" value="0.090">
+    </div>
+    <div class="row">
+      <label>最短レーザー間隔: <span id="vMin" class="value">0.25</span> 秒</label>
+      <input id="minInterval" type="range" min="0.10" max="1.00" step="0.05" value="0.25">
+    </div>
+    <div class="row">
+      <label>景色変化時間: <span id="vIntro" class="value">3.5</span> 秒</label>
+      <input id="introDuration" type="range" min="2.0" max="5.0" step="0.1" value="3.5">
+    </div>
+    <div class="row">
+      <label>〇が出た後から1本目まで: <span id="vDelay" class="value">3.5</span> 秒</label>
+      <input id="startDelay" type="range" min="0.0" max="5.0" step="0.1" value="3.5">
+    </div>
+    <div class="row">
+      <label>クリアに必要な時間: <span id="vClearTime" class="value">7.5</span> 秒</label>
+      <input id="clearTime" type="range" min="7.5" max="30" step="0.5" value="7.5">
+    </div>
+    <div class="row">
+      <label>4本目までの時間: <span id="vFourthTime" class="value">6.0</span> 秒</label>
+      <input id="fourthTime" type="range" min="3" max="7" step="0.1" value="6">
+    </div>
+  </div>
+
+  <label class="checkRow">
+    <input id="invincible" type="checkbox">
+    無敵モード
+  </label>
+
+  <div class="panelButtons">
+    <button id="restart">リセット</button>
+    <button id="closePanel">閉じる</button>
+  </div>
+
+  <div class="info">
+    操作：画面をタッチして開始。ドラッグで移動。WASD/矢印キーも使用可。<br>
+    レーザーは基本●基準で縦/横ランダム。3分割ランダム発生は縦レーザーのみ。<br>
+    〇外ではクリア時間カウント停止。〇出現から30秒で終了。
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  const panel = document.getElementById('panel');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const closePanel = document.getElementById('closePanel');
+  const statePill = document.getElementById('statePill');
+  const hudTime = document.getElementById('hudTime');
+  const hudClear = document.getElementById('hudClear');
+  const hudDodge = document.getElementById('hudDodge');
+  const hudNote = document.getElementById('hudNote');
+
+  const world = { centerX: 0, centerY: 0, radius: 300 };
+
+  const cfg = {
+    invincible: false,
+    background: [77,77,77],
+    playerColor: [255,255,255],
+    laserColor: [255,0,0],
+    circleColor: [100,100,100],
+    clickColor: [255,210,120],
+
+    playerSize: 10,
+    hitScale: 3.0,
+    randomLaneRate: 25,
+
+    playerSpeed: 280,
+    laserWidth: 200,
+
+    laserFadeDuration: 1.5,
+    damageDuration: 0.08,
+
+    initialLaserInterval: 1.5,
+    intervalDecrease: 0.090,
+    minLaserInterval: 0.25,
+
+    startDelay: 3.5,
+    introDuration: 3.5,
+    fourthTime: 6.0,
+
+    damageMaxAlpha: 150,
+    clearTime: 7.5,
+
+    zoom: 1.0,
+  };
+
+  const player = { x: 0, y: 0 };
+  let moveTarget = null;
+  const keys = new Set();
+  const lasers = [];
+
+  let state = 'waiting';
+  let introStartTime = 0;
+  let circleStartTime = 0;
+  let gameTimer = 0;
+  let clearTimer = 0;
+  let introTimer = 0;
+  let lastLaserTime = 0;
+  let laserCount = 0;
+  let dodgeCount = 0;
+  let lastAxis = null;
+  let last = performance.now();
+  let winStartTime = 0;
+  let isDragging = false;
+
+  function getUiSafeTop() {
+    return 54;
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    world.centerX = window.innerWidth / 2;
+    world.centerY = window.innerHeight / 2 + 20;
+    world.radius = Math.min(window.innerWidth, window.innerHeight) * 0.34;
+    world.radius = Math.max(230, Math.min(320, world.radius));
+
+    if (state === 'waiting') {
+      player.x = world.centerX;
+      player.y = world.centerY - world.radius - 80;
+    }
+  }
+
+  function reset() {
+    state = 'waiting';
+    lasers.length = 0;
+    laserCount = 0;
+    dodgeCount = 0;
+    gameTimer = 0;
+    clearTimer = 0;
+    introTimer = 0;
+    lastLaserTime = 0;
+    lastAxis = null;
+    moveTarget = null;
+    winStartTime = 0;
+    isDragging = false;
+    player.x = world.centerX;
+    player.y = world.centerY - world.radius - 80;
+  }
+
+  function begin() {
+    panel.classList.remove('open');
+    state = 'intro';
+    introStartTime = performance.now() / 1000;
+    circleStartTime = 0;
+    lastLaserTime = 0;
+    lasers.length = 0;
+    laserCount = 0;
+    dodgeCount = 0;
+    gameTimer = 0;
+    clearTimer = 0;
+    introTimer = 0;
+    lastAxis = null;
+    moveTarget = null;
+    winStartTime = 0;
+    player.x = world.centerX;
+    player.y = world.centerY - world.radius - 80;
+  }
+
+  function isInCircle(x, y) {
+    return Math.hypot(x - world.centerX, y - world.centerY) <= world.radius;
+  }
+
+  function screenToWorld(sx, sy) {
+    return {
+      x: player.x + (sx - window.innerWidth / 2) / cfg.zoom,
+      y: player.y + (sy - window.innerHeight / 2) / cfg.zoom,
+    };
+  }
+
+  function worldToScreen(x, y) {
+    return {
+      x: (window.innerWidth / 2) + (x - player.x) * cfg.zoom,
+      y: (window.innerHeight / 2) + (y - player.y) * cfg.zoom,
+    };
+  }
+
+  function chooseAxis() {
+    let axis = Math.random() < 0.5 ? 'row' : 'column';
+    if (lastAxis && Math.random() < 0.18) axis = lastAxis === 'row' ? 'column' : 'row';
+    lastAxis = axis;
+    return axis;
+  }
+
+  function addLaser(axis) {
+    const useRandomLane = Math.random() * 100 < cfg.randomLaneRate;
+    if (useRandomLane) axis = 'column';
+
+    let center = axis === 'row' ? player.y : player.x;
+
+    if (useRandomLane) {
+      const laneCenters = [
+        -world.radius + cfg.laserWidth / 2,
+        0,
+        world.radius - cfg.laserWidth / 2,
+      ];
+      const lane = laneCenters[Math.floor(Math.random() * laneCenters.length)];
+      center = world.centerX + lane;
+    }
+
+    lasers.push({
+      axis,
+      center,
+      segmentStart: center - cfg.laserWidth / 2,
+      segmentEnd: center + cfg.laserWidth / 2,
+      time: 0,
+      alpha: 0,
+      reachedFull: false,
+      causedDamage: false,
+      causedDodge: false,
+      resolved: false,
+    });
+  }
+
+  function currentLaserInterval() {
+    if (laserCount > 0 && laserCount < 4) {
+      return Math.max(0.05, (cfg.fourthTime - cfg.startDelay) / 3.0);
+    }
+
+    const byCount = Math.max(0, laserCount - 4) * cfg.intervalDecrease;
+    const byTime = Math.max(0, gameTimer - cfg.fourthTime) * cfg.intervalDecrease * 0.42;
+    return Math.max(cfg.minLaserInterval, cfg.initialLaserInterval - byCount - byTime);
+  }
+
+  function spawnLaser(now) {
+    addLaser(chooseAxis());
+    laserCount++;
+    lastLaserTime = now;
+  }
+
+  function isPlayerHitByLaser(l) {
+    const hitR = cfg.playerSize * cfg.hitScale;
+    if (l.axis === 'row') {
+      return (player.y + hitR) >= l.segmentStart && (player.y - hitR) <= l.segmentEnd;
+    }
+    return (player.x + hitR) >= l.segmentStart && (player.x - hitR) <= l.segmentEnd;
+  }
+
+  function resolveLaser(l) {
+    if (l.resolved) return;
+    l.resolved = true;
+
+    if (isPlayerHitByLaser(l)) {
+      l.causedDamage = true;
+      if (!cfg.invincible && state !== 'win') state = 'dead';
+    } else {
+      l.causedDodge = true;
+      dodgeCount++;
+    }
+  }
+
+  function updateLasers(dt) {
+    for (let i = lasers.length - 1; i >= 0; i--) {
+      const l = lasers[i];
+      l.time += dt;
+
+      if (l.time < cfg.laserFadeDuration) {
+        l.alpha = cfg.damageMaxAlpha * (l.time / cfg.laserFadeDuration);
+      } else {
+        l.alpha = cfg.damageMaxAlpha;
+        if (!l.reachedFull) {
+          l.reachedFull = true;
+          resolveLaser(l);
+        }
+      }
+
+      if (l.time >= cfg.laserFadeDuration + cfg.damageDuration) {
+        lasers.splice(i, 1);
+      }
+    }
+  }
+
+  function movePlayer(dt) {
+    let dx = 0, dy = 0;
+
+    if (keys.has('w') || keys.has('arrowup')) dy -= 1;
+    if (keys.has('s') || keys.has('arrowdown')) dy += 1;
+    if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
+    if (keys.has('d') || keys.has('arrowright')) dx += 1;
+
+    if (dx !== 0 || dy !== 0) moveTarget = null;
+
+    const mag = Math.hypot(dx, dy);
+    if (mag > 0) {
+      dx /= mag;
+      dy /= mag;
+      player.x += dx * cfg.playerSpeed * dt;
+      player.y += dy * cfg.playerSpeed * dt;
+      return;
+    }
+
+    if (moveTarget) {
+      const tx = moveTarget.x - player.x;
+      const ty = moveTarget.y - player.y;
+      const dist = Math.hypot(tx, ty);
+      const step = cfg.playerSpeed * dt;
+      if (dist <= step) {
+        player.x = moveTarget.x;
+        player.y = moveTarget.y;
+        moveTarget = null;
+      } else {
+        player.x += tx / dist * step;
+        player.y += ty / dist * step;
+      }
+    }
+  }
+
+  function update(dt) {
+    const now = performance.now() / 1000;
+
+    if (state === 'intro') {
+      introTimer = now - introStartTime;
+      movePlayer(dt);
+      if (introTimer >= cfg.introDuration) {
+        state = 'active';
+        circleStartTime = now;
+        lastLaserTime = now;
+        gameTimer = 0;
+      }
+      return;
+    }
+
+    if (state !== 'active' && state !== 'win') return;
+
+    gameTimer = now - circleStartTime;
+    movePlayer(dt);
+
+    const insideCircle = isInCircle(player.x, player.y);
+    if ((state === 'active' || state === 'win') && insideCircle) {
+      clearTimer += dt;
+    }
+
+    if (now - lastLaserTime >= currentLaserInterval() && now - circleStartTime >= cfg.startDelay) {
+      spawnLaser(now);
+    }
+
+    updateLasers(dt);
+
+    if (clearTimer >= cfg.clearTime && state !== 'dead') {
+      if (state !== 'win') {
+        state = 'win';
+        winStartTime = gameTimer;
+      }
+    }
+
+    if (gameTimer >= 30 && state !== 'dead') {
+      state = 'finished';
+    }
+  }
+
+  function drawWorldGrid() {
+    const spacing = 80;
+    const startX = Math.floor((player.x - window.innerWidth / 2) / spacing) * spacing;
+    const endX = player.x + window.innerWidth / 2;
+    const startY = Math.floor((player.y - window.innerHeight / 2) / spacing) * spacing;
+    const endY = player.y + window.innerHeight / 2;
+
+    ctx.strokeStyle = state === 'waiting' ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = 1;
+
+    for (let x = startX; x <= endX; x += spacing) {
+      const p1 = worldToScreen(x, player.y - window.innerHeight);
+      const p2 = worldToScreen(x, player.y + window.innerHeight);
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+
+    for (let y = startY; y <= endY; y += spacing) {
+      const p1 = worldToScreen(player.x - window.innerWidth, y);
+      const p2 = worldToScreen(player.x + window.innerWidth, y);
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+
+    const c = worldToScreen(world.centerX, world.centerY);
+    ctx.fillStyle = state === 'waiting' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.20)';
+    ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawCircle() {
+    if (state === 'waiting' || state === 'intro') return;
+    const c = worldToScreen(world.centerX, world.centerY);
+    ctx.strokeStyle = `rgb(${cfg.circleColor.join(',')})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, world.radius * cfg.zoom, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  function drawTarget() {
+    if (!moveTarget || (state !== 'active' && state !== 'intro' && state !== 'win')) return;
+    const p = worldToScreen(moveTarget.x, moveTarget.y);
+    ctx.strokeStyle = `rgba(${cfg.clickColor[0]},${cfg.clickColor[1]},${cfg.clickColor[2]},0.9)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x - 13, p.y); ctx.lineTo(p.x + 13, p.y);
+    ctx.moveTo(p.x, p.y - 13); ctx.lineTo(p.x, p.y + 13);
+    ctx.stroke();
+  }
+
+  function drawLasers() {
+    for (const l of lasers) {
+      ctx.fillStyle = `rgba(${cfg.laserColor[0]},${cfg.laserColor[1]},${cfg.laserColor[2]},${l.alpha / 255})`;
+      if (l.axis === 'row') {
+        const p = worldToScreen(world.centerX - world.radius, l.segmentStart);
+        ctx.fillRect(p.x, p.y, world.radius * 2 * cfg.zoom, cfg.laserWidth * cfg.zoom);
+      } else {
+        const p = worldToScreen(l.segmentStart, world.centerY - world.radius);
+        ctx.fillRect(p.x, p.y, cfg.laserWidth * cfg.zoom, world.radius * 2 * cfg.zoom);
+      }
+    }
+  }
+
+  function drawPlayer() {
+    ctx.fillStyle = `rgb(${cfg.playerColor.join(',')})`;
+    ctx.beginPath();
+    ctx.arc(window.innerWidth / 2, window.innerHeight / 2, cfg.playerSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    const hitR = cfg.playerSize * cfg.hitScale;
+    if (cfg.hitScale > 1) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(window.innerWidth / 2, window.innerHeight / 2, hitR, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawCenterText() {
+    ctx.save();
+    ctx.shadowBlur = 5;
+    ctx.shadowColor = 'black';
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (state === 'waiting') {
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(window.innerWidth/2-140, window.innerHeight/2-32, 280, 64);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 20px Arial';
+      ctx.fillText('タッチで開始', window.innerWidth / 2, window.innerHeight / 2);
+    } else if (state === 'dead') {
+      ctx.font = '24px Arial';
+      ctx.fillText('失敗 - タッチでリセット', window.innerWidth / 2, window.innerHeight / 2);
+    } else if (state === 'win') {
+      ctx.font = '24px Arial';
+      ctx.fillText('目覚めたオーラの壁が感じられる', window.innerWidth / 2, window.innerHeight / 2);
+    } else if (state === 'finished') {
+      ctx.font = '24px Arial';
+      ctx.fillText('終了 - タッチでリセット', window.innerWidth / 2, window.innerHeight / 2);
+    }
+    ctx.restore();
+  }
+
+  function getBackgroundColor() {
+    if (state === 'waiting') return 'rgb(235,232,220)';
+    if (state !== 'intro') return `rgb(${cfg.background.join(',')})`;
+
+    const p = Math.max(0, Math.min(1, introTimer / cfg.introDuration));
+    const day = [125, 165, 185];
+    const sunset = [150, 85, 55];
+    const night = cfg.background;
+    let a, b, q;
+
+    if (p < 0.55) { a = day; b = sunset; q = p / 0.55; }
+    else { a = sunset; b = night; q = (p - 0.55) / 0.45; }
+
+    const r = Math.round(a[0] + (b[0] - a[0]) * q);
+    const gr = Math.round(a[1] + (b[1] - a[1]) * q);
+    const bl = Math.round(a[2] + (b[2] - a[2]) * q);
+    return `rgb(${r},${gr},${bl})`;
+  }
+
+  function updateHud() {
+    const stateText = {
+      waiting: '待機中', intro: '景色変化中', active: '練習中', win: 'クリア後継続中', dead: '失敗', finished: '終了'
+    }[state] || state;
+
+    statePill.textContent = stateText;
+    hudTime.textContent = `経過: ${gameTimer.toFixed(2)}秒 / 30秒`;
+    hudClear.textContent = `クリア時間: ${clearTimer.toFixed(2)} / ${cfg.clearTime.toFixed(1)}秒`;
+    hudDodge.textContent = `回避成功: ${dodgeCount}`;
+
+    if (state === 'waiting') hudNote.textContent = 'タッチで開始';
+    else if (state === 'intro') hudNote.textContent = '〇出現前：移動可能';
+    else if ((state === 'active' || state === 'win') && !isInCircle(player.x, player.y) && state !== 'win') hudNote.textContent = '〇外：クリア時間停止中';
+    else if (state === 'active' && gameTimer < cfg.startDelay) hudNote.textContent = `1本目まで: ${(cfg.startDelay - gameTimer).toFixed(1)}秒`;
+    else if (cfg.invincible) hudNote.textContent = '無敵モード中';
+    else hudNote.textContent = `レーザー間隔: ${currentLaserInterval().toFixed(2)}秒`;
+  }
+
+  function draw() {
+    ctx.fillStyle = getBackgroundColor();
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+    drawWorldGrid();
+    drawCircle();
+    drawTarget();
+    drawLasers();
+    drawPlayer();
+    drawCenterText();
+    updateHud();
+  }
+
+  function loop(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function bindSlider(id, key, label, decimals = 0) {
+    const input = document.getElementById(id);
+    const span = document.getElementById(label);
+    const sync = () => {
+      cfg[key] = Number(input.value);
+      span.textContent = cfg[key].toFixed(decimals);
+    };
+    input.addEventListener('input', sync);
+    sync();
+  }
+
+  bindSlider('speed', 'playerSpeed', 'vSpeed', 0);
+  bindSlider('laserWidth', 'laserWidth', 'vWidth', 0);
+  bindSlider('hitScale', 'hitScale', 'vHitScale', 1);
+  bindSlider('randomLaneRate', 'randomLaneRate', 'vRandomLane', 0);
+  bindSlider('fade', 'laserFadeDuration', 'vFade', 1);
+  bindSlider('initialInterval', 'initialLaserInterval', 'vInitial', 1);
+  bindSlider('intervalDecrease', 'intervalDecrease', 'vDecrease', 3);
+  bindSlider('minInterval', 'minLaserInterval', 'vMin', 2);
+  bindSlider('introDuration', 'introDuration', 'vIntro', 1);
+  bindSlider('startDelay', 'startDelay', 'vDelay', 1);
+  bindSlider('clearTime', 'clearTime', 'vClearTime', 1);
+  bindSlider('fourthTime', 'fourthTime', 'vFourthTime', 1);
+
+  document.getElementById('invincible').addEventListener('change', e => {
+    cfg.invincible = e.target.checked;
+  });
+
+  function isUiTarget(target) {
+    return target.closest && (target.closest('#panel') || target.closest('#topBar'));
+  }
+
+  function pointerStart(x, y, target) {
+    if (isUiTarget(target)) return;
+
+    if (state === 'waiting') {
+      begin();
+      return;
+    }
+
+    if (state === 'dead' || state === 'finished') {
+      reset();
+      return;
+    }
+
+    isDragging = true;
+    moveTarget = screenToWorld(x, y);
+  }
+
+  function pointerMove(x, y) {
+    if (!isDragging) return;
+    moveTarget = screenToWorld(x, y);
+  }
+
+  function pointerEnd() {
+    isDragging = false;
+  }
+
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) {
+      keys.add(k);
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('keyup', e => {
+    keys.delete(e.key.toLowerCase());
+  });
+
+  window.addEventListener('mousedown', e => pointerStart(e.clientX, e.clientY, e.target));
+  window.addEventListener('mousemove', e => pointerMove(e.clientX, e.clientY));
+  window.addEventListener('mouseup', pointerEnd);
+
+  window.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    if (!t) return;
+    pointerStart(t.clientX, t.clientY, e.target);
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (!t) return;
+    pointerMove(t.clientX, t.clientY);
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', e => {
+    pointerEnd();
+    e.preventDefault();
+  }, { passive: false });
+
+  settingsBtn.addEventListener('click', () => panel.classList.toggle('open'));
+  closePanel.addEventListener('click', () => panel.classList.remove('open'));
+  document.getElementById('restart').addEventListener('click', reset);
+  document.getElementById('restartTop').addEventListener('click', reset);
+
+  // iPad Safariのダブルタップ拡大対策
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
