@@ -819,24 +819,34 @@
   window.addEventListener('mousemove', e => pointerMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', pointerEnd);
 
+
   window.addEventListener('touchstart', e => {
     const t = e.touches[0];
     if (!t) return;
+
+    if (isUiTarget(e.target)) return; // ← これ追加
+
     pointerStart(t.clientX, t.clientY, e.target);
     e.preventDefault();
   }, { passive: false });
 
   window.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+
     const t = e.touches[0];
     if (!t) return;
+
     pointerMove(t.clientX, t.clientY);
     e.preventDefault();
   }, { passive: false });
 
   window.addEventListener('touchend', e => {
+    if (!isDragging) return;
+
     pointerEnd();
     e.preventDefault();
   }, { passive: false });
+
 
   settingsBtn.addEventListener('click', () => panel.classList.toggle('open'));
   closePanel.addEventListener('click', () => panel.classList.remove('open'));
