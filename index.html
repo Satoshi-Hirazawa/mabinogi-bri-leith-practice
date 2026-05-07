@@ -217,6 +217,7 @@
   </div>
 
   <label class="checkRow"><input id="invincible" type="checkbox">無敵モード</label>
+  <label class="checkRow"><input id="gridLaserMode" type="checkbox">3×3グリッドレーザー</label>
   <label class="checkRow modeOnly pizzaOnly"><input id="showTankMarker" type="checkbox">タンク位置マーカー表示</label>
 
   <div class="panelButtons">
@@ -228,7 +229,7 @@
     1層ピザ：円を8等分。赤丸はタンクが行くべき位置です。●=タンクの位置によってピザ全体が回転し、12時方向の判定点が白エリアに入れば成功です。タンク自身は緑範囲にいても失敗しません。
   </div>
   <div class="info modeOnly laserOnly">
-    2層50%：ドラッグで移動。レーザーは基本●基準で縦/横ランダム。3分割ランダム発生は縦レーザーのみ。
+    2層50%：ドラッグで移動。レーザーは基本●基準で縦/横ランダム。3×3グリッドレーザーON時は、円の外接正方形を3×3分割し、現在●がいる行/列へレーザーが飛びます。
   </div>
 </div>
 
@@ -252,6 +253,7 @@
     mode: 'laser',
     invincible: false,
     showTankMarker: false,
+    gridLaserMode: false,
     background: [77,77,77],
     playerSize: 30,
     hitScale: 1.0,
@@ -484,15 +486,52 @@
     lastAxis = axis;
     return axis;
   }
+  function getPlayerGridCell() {
+    // 円の外接正方形を3×3に分割し、現在●がいるエリアを求める
+    const left = world.centerX - world.radius;
+    const top = world.centerY - world.radius;
+    const cell = (world.radius * 2) / 3;
+
+    let col = Math.floor((player.x - left) / cell);
+    let row = Math.floor((player.y - top) / cell);
+
+    col = Math.max(0, Math.min(2, col));
+    row = Math.max(0, Math.min(2, row));
+
+    return { row, col, cell, left, top };
+  }
+
   function addLaser(axis) {
-    const useRandomLane = Math.random() * 100 < cfg.randomLaneRate;
-    if (useRandomLane) axis = 'column';
-    let center = axis === 'row' ? player.y : player.x;
-    if (useRandomLane) {
-      const lanes = [-world.radius + cfg.laserWidth / 2, 0, world.radius - cfg.laserWidth / 2];
-      center = world.centerX + lanes[Math.floor(Math.random() * lanes.length)];
+    let center;
+    let width;
+
+    if (cfg.gridLaserMode) {
+      const grid = getPlayerGridCell();
+
+      // 3×3グリッド基準
+      if (axis === 'column') {
+        center = grid.left + grid.cell * (grid.col + 0.5);
+      } else {
+        center = grid.top + grid.cell * (grid.row + 0.5);
+      }
+
+      width = grid.cell;
+
+    } else {
+      // 従来の●座標ぴったり基準
+      center = axis === 'column' ? player.x : player.y;
+      width = cfg.laserWidth;
     }
-    lasers.push({ axis, segmentStart: center - cfg.laserWidth / 2, segmentEnd: center + cfg.laserWidth / 2, time: 0, alpha: 0, reachedFull: false, resolved: false });
+
+    lasers.push({
+      axis,
+      segmentStart: center - width / 2,
+      segmentEnd: center + width / 2,
+      time: 0,
+      alpha: 0,
+      reachedFull: false,
+      resolved: false
+    });
   }
   function spawnLaser(now) { addLaser(chooseAxis()); laserCount++; lastLaserTime = now; }
   function hitLaser(l) {
@@ -747,6 +786,7 @@
   bindSlider('pizzaWarn','pizzaWarn','vPizzaWarn',1); bindSlider('pizzaGap','pizzaGap','vPizzaGap',1); bindSlider('pizzaStartDelay','pizzaStartDelay','vPizzaStartDelay',1);
   document.getElementById('invincible').addEventListener('change',e=>{cfg.invincible=e.target.checked;});
   document.getElementById('showTankMarker').addEventListener('change',e=>{cfg.showTankMarker=e.target.checked;});
+  document.getElementById('gridLaserMode').addEventListener('change',e=>{cfg.gridLaserMode=e.target.checked;});
   document.getElementById('pizzaPattern').addEventListener('change',()=>reset());
   function isUiTarget(t){return t.closest&&(t.closest('#panel')||t.closest('#topBar'));}
   function pointerStart(x,y,target){ if(isUiTarget(target)) return; if(state==='waiting'){begin();return;} if(['dead','finished','pizzaWin'].includes(state)){reset();return;} isDragging=true; moveTarget=screenToWorld(x,y); }
