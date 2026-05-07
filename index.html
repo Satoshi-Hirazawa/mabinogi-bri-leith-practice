@@ -226,7 +226,7 @@
   </div>
 
   <div class="info modeOnly pizzaOnly">
-    1層ピザ：円を8等分。赤丸はタンクが行くべき位置です。●=タンクの位置によってピザ全体が回転し、12時方向の判定点が白エリアに入れば成功です。タンク自身は緑範囲にいても失敗しません。
+    1層ピザ：円を8等分。赤丸はタンクが行くべき位置です。●=タンクの位置によってピザ全体が回転し、12時方向の判定点が白エリアに入れば成功です。タンク自身は緑範囲にいても失敗しません。10回目は無敵化し、全エリア緑範囲になります。
   </div>
   <div class="info modeOnly laserOnly">
     2層50%：ドラッグで移動。レーザーは基本●基準で縦/横ランダム。3×3グリッドレーザーON時は、円の外接正方形を3×3分割し、現在●がいる行/列へレーザーが飛びます。
@@ -458,6 +458,9 @@
   }
 
   function currentPizzaSafeSectors() {
+    // 10回目は全エリア緑範囲にする
+    if (pizza.index >= 9) return [];
+
     // 予兆発生後は安全地帯を固定する。
     if (pizza.phase === 'warn' && pizza.frozenSafe && pizza.frozenSafe.length) {
       return pizza.frozenSafe;
@@ -607,7 +610,7 @@
         pizza.resolved = true;
         // 成功条件：タンク位置によって回転した結果、12時方向が安全になっていること。
         // タンク自身は緑範囲にいても失敗しない。
-        const ok = isInCircle(player.x, player.y) && isTwelveSafe();
+        const ok = pizza.index >= 9 || (isInCircle(player.x, player.y) && isTwelveSafe());
         if (ok || cfg.invincible) pizza.success++;
         else { pizza.fail++; state = 'dead'; return; }
       }
@@ -751,7 +754,9 @@
     if (cfg.mode === 'pizza') {
       hud1.textContent = `ピザ: ${Math.min(pizza.index+1,10)} / 10`;
       hud2.textContent = `成功: ${pizza.success} / 失敗: ${pizza.fail}`;
-      hud3.textContent = `基準赤丸: ${pizza.targetHour}時 / 12時: ${isTwelveSafe() ? '安全' : '危険'}`;
+      hud3.textContent = pizza.index >= 9
+        ? `10回目: 無敵 / 全エリア緑範囲`
+        : `基準赤丸: ${pizza.targetHour}時 / 12時: ${isTwelveSafe() ? '安全' : '危険'}`;
       if (state === 'waiting') hud4.textContent = 'タッチで開始';
       else if (pizza.phase === 'startWait') hud4.textContent = `開始まで: ${(cfg.pizzaStartDelay-pizza.timer).toFixed(1)}秒`;
       else if (pizza.phase === 'startWait') hud4.textContent = `開始まで: ${Math.max(0,cfg.pizzaStartDelay-pizza.timer).toFixed(1)}秒`;
